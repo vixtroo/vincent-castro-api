@@ -9,6 +9,8 @@ npm install
 npm run dev
 ```
 
+Copy `.env.example` to `.env` and set the Supabase URL, anon key, and service-role key before starting the API. Keep `.env` private; the service-role key must remain on the Express backend.
+
 The API runs at `http://localhost:5000` by default.
 
 ## Endpoints
@@ -20,9 +22,9 @@ The API runs at `http://localhost:5000` by default.
 - `PUT /api/projects/:id`
 - `DELETE /api/projects/:id`
 
-Create and update requests expect JSON with `image_url`, `project_name`, `description`, and `tech_stack`. The current service uses an in-memory store; replace the `ProjectStore` implementation in `src/services/project.service.ts` when connecting Supabase/PostgreSQL.
+Create and update requests use `multipart/form-data` with `project_image` (JPG, JPEG, PNG, or WebP), `project_name`, `description`, and `tech_stack` as a JSON array string. A client `user_id` may be sent but is ignored; ownership comes from the authenticated request user. Images are stored in the `project-images` bucket and responses return their Storage path.
 
-Set `AUTH_TOKEN` in `.env` to require a Bearer token for write endpoints. Leave it empty for local development.
+`GET /api/projects` and `GET /api/projects/:id` are public and return projects allowed by the database's public `SELECT` policy. `POST`, `PUT`, and `DELETE` require a Supabase access token in the `Authorization: Bearer <token>` header. The authenticated Supabase user ID is used as `user_id`; any client-provided `user_id` is ignored.
 
 ## Scripts
 
