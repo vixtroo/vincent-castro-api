@@ -1,10 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { createAuthenticatedSupabaseClient, publicSupabase, supabase } from '../config/supabase.js';
+import { createAuthenticatedSupabaseClient, publicSupabase } from '../config/supabase.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { deleteProjectImage, uploadProjectImage } from './storage.service.js';
 import type { CreateProjectInput, Project, UpdateProjectInput } from '../types/project.types.js';
 
 type ProjectImage = Express.Multer.File;
-const bucket = 'project_image';
 
 const isNotFoundError = (error: { code?: string }): boolean => error.code === 'PGRST116';
 
@@ -13,25 +12,9 @@ const throwDatabaseError = (operation: string, error: unknown): never => {
   throw new AppError(502, `Unable to ${operation} project data`);
 };
 
-const getImageExtension = (mimeType: string): string => mimeType === 'image/jpeg' ? 'jpg' : mimeType.slice(6);
 const getDatabaseClient = (accessToken: string) => createAuthenticatedSupabaseClient(accessToken);
 
 export class ProjectService {
-  private async uploadImage(file: ProjectImage, userId: string): Promise<string> {
-    const path = `${userId}/${randomUUID()}.${getImageExtension(file.mimetype)}`;
-    const { error } = await supabase.storage.from(bucket).upload(path, file.buffer, {
-      contentType: file.mimetype,
-      upsert: false,
-    });
-    if (error) throwDatabaseError('upload', error);
-    return path;
-  }
-
-  private async removeImage(path: string): Promise<void> {
-    const { error } = await supabase.storage.from(bucket).remove([path]);
-    if (error) console.error('Supabase image cleanup failed', error);
-  }
-
   async getProjects(): Promise<Project[]> {
     const { data, error } = await publicSupabase.from('projects').select('*');
     if (error) throwDatabaseError('load', error);
@@ -48,10 +31,10 @@ export class ProjectService {
   }
 
   async createProject(input: CreateProjectInput, projectImage: ProjectImage, userId: string, accessToken: string): Promise<Project> {
-    const imagePath = await this.uploadImage(projectImage, userId);
-    const { data, error } = await getDatabaseClient(accessToken).from('projects').insert({ ...input, user_id: userId, project_image: imagePath }).select().single();
+    const uploadedImage = await uploadProjectImage(projectImage, userId);
+    const { data, error } = await getDatabaseClient(accessToken).from('projects').insert({ ...input, user_id: userId, project_image: uploadedImage.publicUrl }).select().single();
     if (error) {
-      await this.removeImage(imagePath);
+      await this.cleanupImage(uploadedImage.path);
       throwDatabaseError('create', error);
     }
     return data as Project;
@@ -59,26 +42,34 @@ export class ProjectService {
 
   async updateProject(id: string, input: UpdateProjectInput, projectImage: ProjectImage | undefined, userId: string, accessToken: string): Promise<Project> {
     const existing = await this.getOwnedProject(id, userId, accessToken);
-    const newImagePath = projectImage ? await this.uploadImage(projectImage, userId) : undefined;
+    const uploadedImage = projectImage ? await uploadProjectImage(projectImage, userId) : undefined;
     const { data, error } = await getDatabaseClient(accessToken).from('projects').update({
       ...input,
-      ...(newImagePath ? { project_image: newImagePath } : {}),
+      ...(uploadedImage ? { project_image: uploadedImage.publicUrl } : {}),
     }).eq('id', id).eq('user_id', userId).select().single();
 
     if (error) {
-      if (newImagePath) await this.removeImage(newImagePath);
+      if (uploadedImage) await this.cleanupImage(uploadedImage.path);
       if (isNotFoundError(error)) throw new AppError(404, 'Project not found');
       throwDatabaseError('update', error);
     }
-    if (newImagePath && existing.project_image) await this.removeImage(existing.project_image);
+    if (uploadedImage && existing.project_image) await this.cleanupImage(existing.project_image);
     return data as Project;
   }
 
   async deleteProject(id: string, userId: string, accessToken: string): Promise<void> {
     const existing = await this.getOwnedProject(id, userId, accessToken);
+    if (existing.project_image) await deleteProjectImage(existing.project_image);
     const { error } = await getDatabaseClient(accessToken).from('projects').delete().eq('id', id).eq('user_id', userId);
     if (error) throwDatabaseError('delete', error);
-    if (existing.project_image) await this.removeImage(existing.project_image);
+  }
+
+  private async cleanupImage(imagePathOrUrl: string): Promise<void> {
+    try {
+      await deleteProjectImage(imagePathOrUrl);
+    } catch (error) {
+      console.error('Supabase image cleanup failed', error);
+    }
   }
 
   private async getOwnedProject(id: string, userId: string, accessToken: string): Promise<Project> {

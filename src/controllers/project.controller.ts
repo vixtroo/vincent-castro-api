@@ -32,13 +32,13 @@ const parseTechStack = (value: unknown): string[] => {
   return parsed;
 };
 
-const validateProjectInput = (body: unknown, partial = false): CreateProjectInput | UpdateProjectInput => {
+const validateProjectInput = (body: unknown, partial = false, hasImage = false): CreateProjectInput | UpdateProjectInput => {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AppError(400, 'Request body must be an object');
   const input = body as Record<string, unknown>;
   const hasUnknownField = Object.keys(input).some((field) => !projectFields.includes(field as typeof projectFields[number]) && field !== 'user_id');
   const missingField = !partial && projectFields.some((field) => !(field in input));
   const hasInvalidText = ['project_name', 'description'].some((field) => field in input && typeof input[field] !== 'string');
-  const hasEmptyUpdate = partial && Object.keys(input).filter((field) => field !== 'user_id').length === 0;
+  const hasEmptyUpdate = partial && !hasImage && Object.keys(input).filter((field) => field !== 'user_id').length === 0;
 
   if (hasUnknownField || missingField || hasInvalidText || hasEmptyUpdate) throw new AppError(400, 'Invalid project payload');
   if ('tech_stack' in input) input.tech_stack = parseTechStack(input.tech_stack);
@@ -66,7 +66,7 @@ export const createProject: RequestHandler = async (request, response, next) => 
 
 export const updateProject: RequestHandler = async (request, response, next) => {
   try {
-    const data = validateProjectInput(request.body, true);
+    const data = validateProjectInput(request.body, true, Boolean(request.file));
     response.json({ success: true, data: await projectService.updateProject(getProjectId(request), data as UpdateProjectInput, request.file, getUserId(request), getAccessToken(request)) });
   } catch (error) { next(error); }
 };

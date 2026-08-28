@@ -8,6 +8,6 @@ export const projectRouter = Router();
 projectRouter.get('/', listProjects);
 projectRouter.get('/:id', getProject);
 
-projectRouter.post('/add-project', authMiddleware, projectImageUpload.single('project_image'), createProject);
-projectRouter.put('/update-project/:id', authMiddleware, projectImageUpload.single('project_image'), updateProject);
-projectRouter.delete('/delete-project/:id', authMiddleware, deleteProject);
+projectRouter.post('/', authMiddleware, projectImageUpload.single('project_image'), createProject);
+projectRouter.put('/:id', authMiddleware, projectImageUpload.single('project_image'), updateProject);
+projectRouter.delete('/:id', authMiddleware, deleteProject);
