@@ -4,6 +4,7 @@ import { env } from './config/env.js';
 import { errorMiddleware, notFoundMiddleware } from './middleware/error.middleware.js';
 import { authRouter } from './routes/auth.routes.js';
 import { projectRouter } from './routes/project.routes.js';
+import { skillRouter } from './routes/skill.routes.js';
 
 export const app = express();
 
@@ -15,5 +16,6 @@ app.get('/health', (_request, response) => {
 });
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectRouter);
+app.use('/api/skills', skillRouter);
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);

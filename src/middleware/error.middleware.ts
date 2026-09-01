@@ -13,13 +13,19 @@ export const notFoundMiddleware: RequestHandler = (_request, response) => {
 };
 
 export const errorMiddleware: ErrorRequestHandler = (error, _request, response, _next) => {
-  const statusCode = error instanceof AppError || error instanceof MulterError ? 400 : 500;
+  const statusCode = error instanceof AppError ? error.statusCode : error instanceof MulterError ? 400 : 500;
   const multerMessage = error instanceof MulterError && error.code === 'LIMIT_FILE_SIZE' ? 'Project image must be 5MB or smaller' : 'Invalid multipart request';
-  const message = error instanceof Error ? error.message : 'Internal server error';
+  const message = error instanceof AppError
+    ? error.message
+    : error instanceof MulterError
+      ? multerMessage
+      : error instanceof Error
+        ? error.message
+        : 'Internal server error';
 
   if (statusCode === 500) {
     console.error(error);
   }
 
-  response.status(statusCode).json({ success: false, message: error instanceof MulterError ? multerMessage : message });
+  response.status(statusCode).json({ success: false, message });
 };
