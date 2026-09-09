@@ -30,6 +30,17 @@ export class ProjectService {
     return data as Project;
   }
 
+  async getCurrentlyBuildingProject(): Promise<Project | null> {
+    const { data, error } = await publicSupabase
+      .from('projects')
+      .select('*')
+      .eq('is_currently_building', true)
+      .maybeSingle();
+
+    if (error) throwDatabaseError('load current project', error);
+    return data as Project | null;
+  }
+
   async createProject(input: CreateProjectInput, projectImage: ProjectImage, userId: string, accessToken: string): Promise<Project> {
     const uploadedImage = await uploadProjectImage(projectImage, userId);
     const { data, error } = await getDatabaseClient(accessToken).from('projects').insert({ ...input, user_id: userId, project_image: uploadedImage.publicUrl }).select().single();
@@ -54,6 +65,43 @@ export class ProjectService {
       throwDatabaseError('update', error);
     }
     if (uploadedImage && existing.project_image) await this.cleanupImage(existing.project_image);
+    return data as Project;
+  }
+
+  async updateCurrentlyBuildingProject(projectId: number, isCurrentlyBuilding: boolean, features: string[] | null | undefined, userId: string, accessToken: string): Promise<Project> {
+    await this.getOwnedProject(String(projectId), userId, accessToken);
+
+    const databaseClient = getDatabaseClient(accessToken);
+
+    if (isCurrentlyBuilding) {
+      const { error: clearError } = await databaseClient
+        .from('projects')
+        .update({ is_currently_building: false })
+        .neq('id', projectId)
+        .eq('is_currently_building', true);
+
+      if (clearError) throwDatabaseError('update current project', clearError);
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      is_currently_building: isCurrentlyBuilding,
+      features: features ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await databaseClient
+      .from('projects')
+      .update(updatePayload)
+      .eq('id', projectId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      if (isNotFoundError(error)) throw new AppError(404, 'Project not found');
+      throwDatabaseError('update current project', error);
+    }
+
     return data as Project;
   }
 

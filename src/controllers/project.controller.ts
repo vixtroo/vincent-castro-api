@@ -1,7 +1,7 @@
 import type { Request, RequestHandler } from 'express';
 import { AppError } from '../middleware/error.middleware.js';
 import { ProjectService } from '../services/project.service.js';
-import type { CreateProjectInput, UpdateProjectInput } from '../types/project.types.js';
+import type { CreateProjectInput, UpdateCurrentlyBuildingProjectInput, UpdateProjectInput } from '../types/project.types.js';
 
 const projectService = new ProjectService();
 const projectFields = ['project_name', 'description', 'tech_stack'] as const;
@@ -10,6 +10,13 @@ const getProjectId = (request: Request): string => {
   const { id } = request.params;
   if (typeof id !== 'string' || !id) throw new AppError(400, 'Project ID is required');
   return id;
+};
+
+const getCurrentBuildingProjectId = (request: Request): number => {
+  const { id } = request.params;
+  const projectId = Number(id);
+  if (!Number.isInteger(projectId) || projectId <= 0) throw new AppError(400, 'Invalid project ID');
+  return projectId;
 };
 
 const getUserId = (request: Request): string => {
@@ -46,6 +53,42 @@ const validateProjectInput = (body: unknown, partial = false, hasImage = false):
   return input as unknown as CreateProjectInput | UpdateProjectInput;
 };
 
+const validateCurrentlyBuildingProjectInput = (body: unknown): UpdateCurrentlyBuildingProjectInput => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AppError(400, 'Request body must be an object');
+  const input = body as Record<string, unknown>;
+
+  if (!('is_currently_building' in input) || typeof input.is_currently_building !== 'boolean') {
+    throw new AppError(400, 'is_currently_building is required and must be a boolean');
+  }
+
+  const result: UpdateCurrentlyBuildingProjectInput = {
+    is_currently_building: input.is_currently_building as boolean,
+  };
+
+  if (!('features' in input)) {
+    return result;
+  }
+
+  if (input.features === null) {
+    result.features = null;
+    return result;
+  }
+
+  if (!Array.isArray(input.features)) {
+    throw new AppError(400, 'features must be null or an array of strings');
+  }
+
+  const features = input.features.map((feature) => {
+    if (typeof feature !== 'string') throw new AppError(400, 'features must be null or an array of strings');
+    const trimmed = feature.trim();
+    if (trimmed.length === 0) throw new AppError(400, 'features must be null or an array of strings');
+    return trimmed;
+  });
+
+  result.features = features;
+  return result;
+};
+
 export const listProjects: RequestHandler = async (request, response, next) => {
   try { response.json({ success: true, data: await projectService.getProjects() }); } catch (error) { next(error); }
 };
@@ -53,6 +96,12 @@ export const listProjects: RequestHandler = async (request, response, next) => {
 export const getProject: RequestHandler = async (request, response, next) => {
   try {
     response.json({ success: true, data: await projectService.getProjectById(getProjectId(request)) });
+  } catch (error) { next(error); }
+};
+
+export const getCurrentlyBuildingProject: RequestHandler = async (_request, response, next) => {
+  try {
+    response.json({ success: true, data: await projectService.getCurrentlyBuildingProject() });
   } catch (error) { next(error); }
 };
 
@@ -68,6 +117,22 @@ export const updateProject: RequestHandler = async (request, response, next) => 
   try {
     const data = validateProjectInput(request.body, true, Boolean(request.file));
     response.json({ success: true, data: await projectService.updateProject(getProjectId(request), data as UpdateProjectInput, request.file, getUserId(request), getAccessToken(request)) });
+  } catch (error) { next(error); }
+};
+
+export const updateCurrentlyBuildingProject: RequestHandler = async (request, response, next) => {
+  try {
+    const data = validateCurrentlyBuildingProjectInput(request.body);
+    response.json({
+      success: true,
+      data: await projectService.updateCurrentlyBuildingProject(
+        getCurrentBuildingProjectId(request),
+        data.is_currently_building,
+        data.features,
+        getUserId(request),
+        getAccessToken(request),
+      ),
+    });
   } catch (error) { next(error); }
 };
 
