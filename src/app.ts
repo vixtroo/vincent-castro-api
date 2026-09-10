@@ -19,3 +19,5 @@ app.use('/api/projects', projectRouter);
 app.use('/api/skills', skillRouter);
 app.use(notFoundMiddleware);
 app.use(errorMiddleware);
+
+export default app;
