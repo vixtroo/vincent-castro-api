@@ -6,10 +6,10 @@ import { projectImageUpload } from '../middleware/upload.middleware.js';
 export const projectRouter = Router();
 
 projectRouter.get('/currently-building', getCurrentlyBuildingProject);
-projectRouter.get('/', listProjects);
-projectRouter.get('/:id', getProject);
+projectRouter.get('/get-all-projects', listProjects);
+projectRouter.get('/:id/get-project', getProject);
 
-projectRouter.post('/', authMiddleware, projectImageUpload.single('project_image'), createProject);
-projectRouter.put('/:id', authMiddleware, projectImageUpload.single('project_image'), updateProject);
-projectRouter.patch('/:id/currently-building', authMiddleware, updateCurrentlyBuildingProject);
-projectRouter.delete('/:id', authMiddleware, deleteProject);
+projectRouter.post('/create-project', authMiddleware, projectImageUpload.single('project_image'), createProject);
+projectRouter.put('/:id/update-project', authMiddleware, projectImageUpload.single('project_image'), updateProject);
+projectRouter.patch('/:id/update-currently-building', authMiddleware, updateCurrentlyBuildingProject);
+projectRouter.delete('/:id/delete-project', authMiddleware, deleteProject);

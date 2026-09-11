@@ -16,7 +16,7 @@ export class SkillService {
     const { data, error } = await publicSupabase
       .from('skills')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('id', { ascending: true });
 
     if (error) throwDatabaseError('load', error);
     return data as Skill[];
