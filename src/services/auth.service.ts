@@ -1,4 +1,4 @@
-import { publicSupabase } from '../config/supabase.js';
+import { publicSupabase, supabase } from '../config/supabase.js';
 import { AppError } from '../middleware/error.middleware.js';
 import type { AuthUser, LoginInput } from '../types/auth.types.js';
 
@@ -22,4 +22,13 @@ export const login = async ({ email, password }: LoginInput): Promise<LoginResul
     expires_in: data.session.expires_in,
     user: { id: data.user.id, email: data.user.email ?? '' },
   };
+};
+
+export const logout = async (accessToken: string): Promise<void> => {
+  const { error } = await supabase.auth.admin.signOut(accessToken, 'local');
+
+  if (error) {
+    console.error('Supabase logout failed', error);
+    throw new AppError(502, 'Unable to log out');
+  }
 };
