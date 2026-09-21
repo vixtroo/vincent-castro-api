@@ -10,6 +10,13 @@ export interface Skill {
   user_id: string;
 }
 
+export interface PaginatedSkills {
+  skills: Skill[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface CreateSkillInput {
   name: string;
   category: SkillCategory;

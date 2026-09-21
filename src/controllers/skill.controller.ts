@@ -28,6 +28,14 @@ const getAccessToken = (request: Request): string => {
   return request.accessToken;
 };
 
+const parsePositiveInteger = (value: unknown, name: string, defaultValue: number): number => {
+  if (value === undefined) return defaultValue;
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) throw new AppError(400, `${name} must be a positive integer`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new AppError(400, `${name} must be a positive integer`);
+  return parsed;
+};
+
 const isValidUuid = (value: unknown): value is string => {
   return typeof value === 'string' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(value);
 };
@@ -69,9 +77,11 @@ const validateSkillInput = (body: unknown, partial = false): CreateSkillInput | 
   return input as CreateSkillInput | UpdateSkillInput;
 };
 
-export const listSkills: RequestHandler = async (_request, response, next) => {
+export const listSkills: RequestHandler = async (request, response, next) => {
   try {
-    response.json({ success: true, data: await skillService.getSkills() });
+    const page = parsePositiveInteger(request.query.page, 'page', 1);
+    const limit = parsePositiveInteger(request.query.limit, 'limit', 100);
+    response.json({ success: true, data: await skillService.getSkills(page, limit) });
   } catch (error) {
     next(error);
   }

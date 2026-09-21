@@ -1,6 +1,6 @@
 import { createAuthenticatedSupabaseClient, publicSupabase } from '../config/supabase.js';
 import { AppError } from '../middleware/error.middleware.js';
-import type { CreateSkillInput, Skill, UpdateSkillInput } from '../types/skill.types.js';
+import type { CreateSkillInput, PaginatedSkills, Skill, UpdateSkillInput } from '../types/skill.types.js';
 
 const isNotFoundError = (error: { code?: string }): boolean => error.code === 'PGRST116';
 
@@ -12,14 +12,16 @@ const throwDatabaseError = (operation: string, error: unknown): never => {
 const getDatabaseClient = (accessToken: string) => createAuthenticatedSupabaseClient(accessToken);
 
 export class SkillService {
-  async getSkills(): Promise<Skill[]> {
-    const { data, error } = await publicSupabase
+  async getSkills(page: number, limit: number): Promise<PaginatedSkills> {
+    const offset = (page - 1) * limit;
+    const { data, count, error } = await publicSupabase
       .from('skills')
-      .select('*')
+      .select('*', { count: 'exact' })
+      .range(offset, offset + limit - 1)
       .order('id', { ascending: true });
 
     if (error) throwDatabaseError('load', error);
-    return data as Skill[];
+    return { skills: data as Skill[], total: count ?? 0, page, limit };
   }
 
   async getSkillById(id: number): Promise<Skill> {
