@@ -1,7 +1,7 @@
 import { createAuthenticatedSupabaseClient, publicSupabase } from '../config/supabase.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { deleteProjectImage, uploadProjectImage } from './storage.service.js';
-import type { CreateProjectInput, Project, UpdateProjectInput } from '../types/project.types.js';
+import type { CreateProjectInput, PaginatedProjects, Project, UpdateProjectInput } from '../types/project.types.js';
 
 type ProjectImage = Express.Multer.File;
 
@@ -15,10 +15,14 @@ const throwDatabaseError = (operation: string, error: unknown): never => {
 const getDatabaseClient = (accessToken: string) => createAuthenticatedSupabaseClient(accessToken);
 
 export class ProjectService {
-  async getProjects(): Promise<Project[]> {
-    const { data, error } = await publicSupabase.from('projects').select('*');
+  async getProjects(page: number, limit: number): Promise<PaginatedProjects> {
+    const offset = (page - 1) * limit;
+    const { data, count, error } = await publicSupabase
+      .from('projects')
+      .select('*', { count: 'exact' })
+      .range(offset, offset + limit - 1);
     if (error) throwDatabaseError('load', error);
-    return data as Project[];
+    return { projects: data as Project[], total: count ?? 0, page, limit };
   }
 
   async getProjectById(id: string): Promise<Project> {

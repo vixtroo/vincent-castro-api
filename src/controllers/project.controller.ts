@@ -29,6 +29,14 @@ const getAccessToken = (request: Request): string => {
   return request.accessToken;
 };
 
+const parsePositiveInteger = (value: unknown, name: string, defaultValue: number): number => {
+  if (value === undefined) return defaultValue;
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) throw new AppError(400, `${name} must be a positive integer`);
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new AppError(400, `${name} must be a positive integer`);
+  return parsed;
+};
+
 const parseTechStack = (value: unknown): string[] => {
   if (typeof value !== 'string') throw new AppError(400, 'tech_stack must be a JSON array');
   let parsed: unknown;
@@ -90,7 +98,11 @@ const validateCurrentlyBuildingProjectInput = (body: unknown): UpdateCurrentlyBu
 };
 
 export const listProjects: RequestHandler = async (request, response, next) => {
-  try { response.json({ success: true, data: await projectService.getProjects() }); } catch (error) { next(error); }
+  try {
+    const page = parsePositiveInteger(request.query.page, 'page', 1);
+    const limit = parsePositiveInteger(request.query.limit, 'limit', 10);
+    response.json({ success: true, data: await projectService.getProjects(page, limit) });
+  } catch (error) { next(error); }
 };
 
 export const getProject: RequestHandler = async (request, response, next) => {

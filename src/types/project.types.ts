@@ -11,6 +11,13 @@ export interface Project {
   updated_at: string;
 }
 
+export interface PaginatedProjects {
+  projects: Project[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export interface UpdateCurrentlyBuildingProjectInput {
   is_currently_building: boolean;
   features?: string[] | null;
