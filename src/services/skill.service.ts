@@ -59,6 +59,7 @@ export class SkillService {
 
     if (input.name !== undefined) sanitizedInput.name = input.name.trim();
     if (input.category !== undefined) sanitizedInput.category = input.category;
+    sanitizedInput.updated_at = new Date().toISOString();
 
     const { data, error } = await getDatabaseClient(accessToken)
       .from('skills')

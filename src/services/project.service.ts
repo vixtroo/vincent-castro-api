@@ -61,6 +61,7 @@ export class ProjectService {
     const { data, error } = await getDatabaseClient(accessToken).from('projects').update({
       ...input,
       ...(uploadedImage ? { project_image: uploadedImage.publicUrl } : {}),
+      updated_at: new Date().toISOString(),
     }).eq('id', id).eq('user_id', userId).select().single();
 
     if (error) {
@@ -76,11 +77,12 @@ export class ProjectService {
     await this.getOwnedProject(String(projectId), userId, accessToken);
 
     const databaseClient = getDatabaseClient(accessToken);
+    const updatedAt = new Date().toISOString();
 
     if (isCurrentlyBuilding) {
       const { error: clearError } = await databaseClient
         .from('projects')
-        .update({ is_currently_building: false })
+        .update({ is_currently_building: false, updated_at: updatedAt })
         .neq('id', projectId)
         .eq('is_currently_building', true);
 
@@ -90,7 +92,7 @@ export class ProjectService {
     const updatePayload: Record<string, unknown> = {
       is_currently_building: isCurrentlyBuilding,
       features: features ?? null,
-      updated_at: new Date().toISOString(),
+      updated_at: updatedAt,
     };
 
     const { data, error } = await databaseClient
