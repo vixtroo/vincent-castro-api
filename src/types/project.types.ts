@@ -18,11 +18,6 @@ export interface PaginatedProjects {
   limit: number;
 }
 
-export interface UpdateCurrentlyBuildingProjectInput {
-  is_currently_building: boolean;
-  features?: string[] | null;
-}
-
 export type CreateProjectInput = Omit<Project, 'id' | 'user_id' | 'project_image' | 'created_at' | 'updated_at' | 'features' | 'is_currently_building'>
   & Partial<Pick<Project, 'features' | 'is_currently_building'>>;
 export type UpdateProjectInput = Partial<CreateProjectInput>;

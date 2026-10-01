@@ -81,36 +81,6 @@ export class ProjectService {
     }
   }
 
-  async updateCurrentlyBuildingProject(projectId: number, isCurrentlyBuilding: boolean, features: string[] | null | undefined, userId: string, accessToken: string): Promise<Project> {
-    await this.getOwnedProject(String(projectId), userId, accessToken);
-
-    const databaseClient = getDatabaseClient(accessToken);
-    const updatedAt = new Date().toISOString();
-
-    if (isCurrentlyBuilding) await this.clearOtherCurrentlyBuildingProjects(String(projectId));
-
-    const updatePayload: Record<string, unknown> = {
-      is_currently_building: isCurrentlyBuilding,
-      features: features ?? null,
-      updated_at: updatedAt,
-    };
-
-    const { data, error } = await databaseClient
-      .from('projects')
-      .update(updatePayload)
-      .eq('id', projectId)
-      .eq('user_id', userId)
-      .select()
-      .single();
-
-    if (error) {
-      if (isNotFoundError(error)) throw new AppError(404, 'Project not found');
-      throwDatabaseError('update current project', error);
-    }
-
-    return data as Project;
-  }
-
   async deleteProject(id: string, userId: string, accessToken: string): Promise<void> {
     const existing = await this.getOwnedProject(id, userId, accessToken);
     if (existing.project_image) await deleteProjectImage(existing.project_image);
