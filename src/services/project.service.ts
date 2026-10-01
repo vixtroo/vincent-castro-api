@@ -1,4 +1,4 @@
-import { createAuthenticatedSupabaseClient, publicSupabase } from '../config/supabase.js';
+import { createAuthenticatedSupabaseClient, publicSupabase, supabase } from '../config/supabase.js';
 import { AppError } from '../middleware/error.middleware.js';
 import { deleteProjectImage, uploadProjectImage } from './storage.service.js';
 import type { CreateProjectInput, PaginatedProjects, Project, UpdateProjectInput } from '../types/project.types.js';
@@ -47,30 +47,38 @@ export class ProjectService {
 
   async createProject(input: CreateProjectInput, projectImage: ProjectImage, userId: string, accessToken: string): Promise<Project> {
     const uploadedImage = await uploadProjectImage(projectImage, userId);
-    const { data, error } = await getDatabaseClient(accessToken).from('projects').insert({ ...input, user_id: userId, project_image: uploadedImage.publicUrl }).select().single();
-    if (error) {
+    try {
+      if (input.is_currently_building) await this.clearOtherCurrentlyBuildingProjects();
+      const { data, error } = await getDatabaseClient(accessToken).from('projects').insert({ ...input, user_id: userId, project_image: uploadedImage.publicUrl }).select().single();
+      if (error) throwDatabaseError('create', error);
+      return data as Project;
+    } catch (error) {
       await this.cleanupImage(uploadedImage.path);
-      throwDatabaseError('create', error);
+      throw error;
     }
-    return data as Project;
   }
 
   async updateProject(id: string, input: UpdateProjectInput, projectImage: ProjectImage | undefined, userId: string, accessToken: string): Promise<Project> {
     const existing = await this.getOwnedProject(id, userId, accessToken);
     const uploadedImage = projectImage ? await uploadProjectImage(projectImage, userId) : undefined;
-    const { data, error } = await getDatabaseClient(accessToken).from('projects').update({
-      ...input,
-      ...(uploadedImage ? { project_image: uploadedImage.publicUrl } : {}),
-      updated_at: new Date().toISOString(),
-    }).eq('id', id).eq('user_id', userId).select().single();
+    try {
+      if (input.is_currently_building) await this.clearOtherCurrentlyBuildingProjects(id);
+      const { data, error } = await getDatabaseClient(accessToken).from('projects').update({
+        ...input,
+        ...(uploadedImage ? { project_image: uploadedImage.publicUrl } : {}),
+        updated_at: new Date().toISOString(),
+      }).eq('id', id).eq('user_id', userId).select().single();
 
-    if (error) {
+      if (error) {
+        if (isNotFoundError(error)) throw new AppError(404, 'Project not found');
+        throwDatabaseError('update', error);
+      }
+      if (uploadedImage && existing.project_image) await this.cleanupImage(existing.project_image);
+      return data as Project;
+    } catch (error) {
       if (uploadedImage) await this.cleanupImage(uploadedImage.path);
-      if (isNotFoundError(error)) throw new AppError(404, 'Project not found');
-      throwDatabaseError('update', error);
+      throw error;
     }
-    if (uploadedImage && existing.project_image) await this.cleanupImage(existing.project_image);
-    return data as Project;
   }
 
   async updateCurrentlyBuildingProject(projectId: number, isCurrentlyBuilding: boolean, features: string[] | null | undefined, userId: string, accessToken: string): Promise<Project> {
@@ -79,15 +87,7 @@ export class ProjectService {
     const databaseClient = getDatabaseClient(accessToken);
     const updatedAt = new Date().toISOString();
 
-    if (isCurrentlyBuilding) {
-      const { error: clearError } = await databaseClient
-        .from('projects')
-        .update({ is_currently_building: false, updated_at: updatedAt })
-        .neq('id', projectId)
-        .eq('is_currently_building', true);
-
-      if (clearError) throwDatabaseError('update current project', clearError);
-    }
+    if (isCurrentlyBuilding) await this.clearOtherCurrentlyBuildingProjects(String(projectId));
 
     const updatePayload: Record<string, unknown> = {
       is_currently_building: isCurrentlyBuilding,
@@ -124,6 +124,16 @@ export class ProjectService {
     } catch (error) {
       console.error('Supabase image cleanup failed', error);
     }
+  }
+
+  private async clearOtherCurrentlyBuildingProjects(projectId?: string): Promise<void> {
+    let query = supabase
+      .from('projects')
+      .update({ is_currently_building: false, updated_at: new Date().toISOString() })
+      .eq('is_currently_building', true);
+    if (projectId) query = query.neq('id', projectId);
+    const { error } = await query;
+    if (error) throwDatabaseError('update current project', error);
   }
 
   private async getOwnedProject(id: string, userId: string, accessToken: string): Promise<Project> {

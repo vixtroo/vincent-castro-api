@@ -23,7 +23,8 @@ export interface UpdateCurrentlyBuildingProjectInput {
   features?: string[] | null;
 }
 
-export type CreateProjectInput = Omit<Project, 'id' | 'user_id' | 'project_image' | 'created_at' | 'updated_at'>;
+export type CreateProjectInput = Omit<Project, 'id' | 'user_id' | 'project_image' | 'created_at' | 'updated_at' | 'features' | 'is_currently_building'>
+  & Partial<Pick<Project, 'features' | 'is_currently_building'>>;
 export type UpdateProjectInput = Partial<CreateProjectInput>;
 
 export interface ApiSuccess<T> {
